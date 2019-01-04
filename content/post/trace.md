@@ -15,8 +15,10 @@ contentCopyright: true
 # reward: false
 # mathjax: false
 ---
-# TRACE[^4][^13]
-linux下的trace，这里只讨论function相关的分析，event和计数器不涉及。从两个维度讨论，首先是根据运行态：分为kernel和userland；其次根据trace方式：分为静态分析和动态分析。
+对于linux下的trace，我建议你参考Brendan Gregg的文章：[Choosing a linux tracer](http://www.brendangregg.com/blog/2015-07-08/choosing-a-linux-tracer.html)，里面详细列出了linux下每个tracer的介绍，本文里主要介绍ftrace，讨论function相关的部分，event和计数器不涉及。
+
+下面我们从两个维度来看看ftrace在linux中的使用，首先是根据运行态：分为kernel和userland；其次根据trace方式：分为静态分析和动态分析。
+
 ## Kernel
 kernel空间下，静态分析是指tracepoint，动态分析是指kprobe
 ### 静态分析
@@ -37,6 +39,7 @@ tcp:tcp_probe                                      [Tracepoint event]
 ftrace是linux下的主要trace框架，linux实现了一个tracefs文件系统（类似proc的虚文件系统，驻留在内存），挂载在/sys/kernel/debug/tracing目录下，里面包括所有ftrace相关的内容，ftrace就是通过配置该目录下的文件，完成tracing。
 
 ftrace里面涉及到静态分析的除了tracepoint之外，另外还有一个部分叫function，分别介绍
+
 ##### function
 traceing目录下，带function字样的文件都和function有关，文件available_filter_functions里面包括了所有能trace的function（在没有添加任何filter的情况下）。如果你需要开启function tracer（更多的tracer，查看文件available_tracers，里面包括了系统支持哪些tracer），只需要执行命令：`echo function > current_tracer`，启用之后，你能查看function trace的输出和输出格式定义：
 
@@ -54,18 +57,13 @@ traceing目录下，带function字样的文件都和function有关，文件avail
            gdbus-1275  [001] .... 11758.901088: unix_poll <-sock_poll
 ```
 
-如果你查看trace的内容，你会发现内容太多，你很难找到有价值的东西，绝大部分时候，你不是对整个系统的调用感兴趣，你只想看你关心的内容，ftrace提供了function filter来进行trace过滤：通过设置` set_ftrace_filter  set_ftrace_notrace  set_ftrace_pid`三个文件，你能过滤需要trace的function。
+如果你查看trace的内容，你会发现内容太多，你很难找到有价值的东西，绝大部分时候，你不是对整个系统的调用感兴趣，你只想看你关心的内容，ftrace提供了function filter来进行trace过滤：通过设置` set_ftrace_filter  set_ftrace_notrace  set_ftrace_pid`三个文件，你能过滤出来需要trace的function。
 
 最简单的做法是看看available_filter_functions里面有些什么，里面的这些function都是可以用，例如我关心tcp_sendmsg：`echo tcp_sendmsg > set_ftrace_filter`，这样function tracer就只会记录tcp_sendmsg这个function。当然filter也支持“*”号通配符，支持三种写法：“*key/*key*/key*”。也支持模块过滤“echo :mod:ext3 > set_ftrace_filter”
 
-另外，filter也支持“Format: <function>:<trigger>[:count]”这类的写法，通过它你能实现：某个function调用了，就tracingoff/tracingon/stacktrace/snapshot/dump/cpudump。例如：`echo do_trap:traceoff:3 > set_ftrace_filter`，do_trap调用三次，停止trace。
+另外，filter也支持“Format: <function>:<trigger>[:count]”这类的写法，通过它你能实现：某个function调用了，就触发一个预先定义的action（tracingoff/tracingon/stacktrace/snapshot/dump/cpudump），执行相关操作。例如：`echo do_trap:traceoff:3 > set_ftrace_filter`，do_trap调用三次，执行停止trace操作。
 
 如果你需要看到调用栈，可以设置：`echo 1 > options/func_stack_trace`，但是必须注意，该操作容易导致问题，务必需要先设置filter，缩小trace范围，否则容易导致系统问题。
-
-这里主要说一下tracepoint相关内容。tracing目录下有一个events目录，里面就是所有的kernel tracepoint，内容和`perf list tracepoint`输出一致，只是这里是目录结构呈现。
-trace方法就是找到对应的tracepoint，例如tcp_probe，进入到该目录下（events/tcp/tcp_probe），通过命令`echo 1 > enable`激活该探针，然后你就可以回到tracing目录下，查看trace文件内容，里面能看到trace内容，输出格式可以参考探针目录下的format文件。
-
-另外你也能设置filter，根据条件过滤事件；你也能设置triger，当条件满足的时候，触发定义的action，例如stracktrace，输出栈到trace文件
 
 ``` shell
 [root@tacyArch tracing]# cat available_filter_functions |grep tcp_sendmsg
@@ -99,7 +97,11 @@ bash: echo: write error: Invalid argument
 总的来说，function tracer最大的问题就是给出的信息太模糊，有用的信息太少，也无法扩展（你只能enable它）。很多时候，虽然知道function被调用，知道调用的pid和comm，但光有这些信息对于解决问题是不够的。
 
 ##### tracepoint
-tracing里面的events目录，包含了所有的tracepoint，每一个tracepoint都以目录存在，目录下面是针对该tracepoint的配置文件:
+下面我们来看看tracepoint相关内容。tracing目录下有一个events目录，里面就是所有的kernel tracepoint，包含了所有的tracepoint，每一个tracepoint都以目录存在，目录下面是针对该tracepoint的配置文件。
+
+trace方法就是找到对应的tracepoint，例如tcp_probe，进入到该目录下（events/tcp/tcp_probe），通过命令`echo 1 > enable`激活该探针，然后你就可以回到tracing目录下，查看trace文件内容，里面能看到trace内容，输出格式可以参考探针目录下的format文件。
+
+另外你也能设置filter，根据条件过滤事件；你也能设置triger，当条件满足的时候，触发定义的action，例如stracktrace，输出栈到trace文件
 
 ``` shell
 [root@tacyArch tcp_receive_reset]# ls
@@ -164,14 +166,16 @@ perf位于kernel源代码的tools下，linux的主要性能分析工具之一，
 [root@tacyArch ~]#
 
 ```
+#### 小结
+静态分析方法比较简单，无需太多代码方面的知识，只需要通过配置即可完成。用户能通过对合适的tracepoint进行分析，找出有用的信息，从而解决一些疑难问题。但是静态分析受限于预先埋下的探针，另外探针输出的内容也无法增加，在一些情况下，满足不了trace的需求。
 
 ### 动态分析
-动态分析，当某函数没有预先在代码中埋下探针的时候，系统能够动态给它添加探针的分析方式。在kernel中，这些动态添加的探针也被称为kprobe。kernel把所有的可symbol输出在/proc/kallsyms文件中，你可以对这里面的所有symbol添加探针。kprobe可以说是linux中最牛逼的trace手段。
+下面我们来看看动态分析，动态分析，顾名思义，就是当某函数没有预先在代码中埋下探针的时候，系统能够动态给它添加探针的分析方式。在kernel中，这些动态添加的探针也被称为kprobe。kernel把所有的symbol输出在/proc/kallsyms文件中，你可以对这里面的所有symbol添加探针。kprobe可以说是linux中最牛逼的trace手段。
 
-动态分析也支持ftrace和perf两种方式。两者的选择：优先选择perf，perf会做错误检验，不容易导致问题，ftrace的话就需要你特别小心，这里可是在kernel层面的操作，一个不小心，系统可能会挂起或者中断。
+动态分析也支持ftrace和perf两种方式。两者的选择：优先选择perf，主要原因是perf会做错误检验，不容易导致问题，ftrace的话就需要你特别小心，这里可是在kernel层面的操作，一个不小心，系统可能会挂起或者中断。
 
 #### ftrace[^6]
-/proc/kallsyms里面所有的symbol都能添加kprobe，kprobe和function tracer无关，无需启用function tracer。你只需定义好event，写入到kprobe_events即可，ftrace会自动在/sys/kernel/debug/tracing/events下创建kprobe目录，并在该目录下为每个kprobe创建类似tracepoint的目录，之后你只需要通过enable文件来控制启用还是禁用。event的语法如下：
+/proc/kallsyms里面所有的symbol都能添加kprobe，kprobe和function tracer无关，无需启用function tracer。你只需定义好event，写入到traceing目录下的kprobe_events文件即可，ftrace会自动在/sys/kernel/debug/tracing/events下创建kprobe目录，并在该目录下为每个kprobe创建类似tracepoint的目录，之后你只需要通过enable文件来控制启用还是禁用。kprobe event的语法定义如下：
 
 ``` shell
 Synopsis of kprobe_events
@@ -248,9 +252,11 @@ print fmt: "(%lx)", REC->__probe_ip
             curl-21745 [001] ...1 27996.148112: tcp_sendmsg: (tcp_sendmsg+0x0/0x40)
 [root@tacyArch tracing]# echo 0 > events/kprobes/tcp_sendmsg/enable
 ```
-看起来和ftrace的function tracer差不多，这就尴尬了？
+输出结果看起来和ftrace的function tracer差不多，这就尴尬了？我们想要看到调用参数
 
-继续努力，接下来，我们看看怎么查看调用参数，先看看tcp_sendmsg代码：
+继续努力，接下来，我们看看怎么输出调用参数，先看看tcp_sendmsg代码：
+
+（下面的操作依赖kernel debug info的安装）
 
 ``` shell
 [root@tacyArch src]# gdb /lib/modules/4.19.12-arch1-1-ARCH/build/vmlinux
@@ -273,7 +279,9 @@ Source directories searched: /home/tacy/workspace/archlinux-linux:$cdir:$cwd
 1443            ret = tcp_sendmsg_locked(sk, msg, size);
 
 ```
-tcp_sendmsg有3个调用参数，我们希望能看到发送包的大小：size，第三个参数的寄存器使用的是rdx（参考System V ABI AMD64[^9][^10]，找到每个register定义），我们重新定义一个probe，覆盖之前的：
+上面的代码输出显示，tcp_sendmsg有3个调用参数。我们希望能把发送包的大小（size）输出的trace结果中。这里，你首先需要知道，在X64架构下，calling的参数存放规范（参考System V ABI AMD64[^9][^10]，找到每个register定义），根据规范，我们知道第三个参数的寄存器使用的是rdx。
+
+下面我们重新定义一个probe，覆盖之前的：
 
 ``` shell
 [root@tacyArch tracing]# echo 'probe:tcp_sendmsg tcp_sendmsg size=%dx' > kprobe_events
@@ -388,9 +396,13 @@ Available variables at tcp_sendmsg
 # perf probe --add 'tcp_sendmsg size'  # 使用tcp_sendmsg参数，输出到结果中
 # perf probe -V tcp_sendmsg:+9  # 可以查看函数内部变量，内部变量也能输出
 ```
+#### 小结
+动态分析方法和静态分析方法相比，需要你具备代码级别的知识，对kernel代码越熟悉，对linux的tracer就像玩一样，感觉没啥解决不了的问题，这方面可以参考大牛Brendan Gregg。
 
-## userland
-usersland的trace同样包括静态和动态两部分，但是这两部分我们也统一称为uprobe[^5]，你可以在ftrace目录（/sys/kernel/debug/tracing）下的uprobe_events文件中找到你定义的所有uprobe event。
+同时，通过kprobe，也是让你学习了解kernel的一个最佳途径，无需修改代码，直接进行debug。
+
+## Userland
+Usersland的trace同样包括静态和动态两部分，但是这两部分我们也统一称为uprobe[^5]，你可以在ftrace目录（/sys/kernel/debug/tracing）下的uprobe_events文件中找到你定义的所有uprobe event。
 
 uprobe event定义：
 
@@ -427,7 +439,9 @@ Synopsis of uprobe_tracer
 
 同样，我们也可以通过ftrace和perf两种方式操作它。但是ftrace操作方法复杂（主要是需要小心操作地址），方法参考[Hacking Linux USDT with Ftrace](http://www.brendangregg.com/blog/2015-07-03/hacking-linux-usdt-ftrace.html)。
 
-下面我们用openjdk为例，说明用户空间的静态分析方法。首先需要你的JDK启用了enable-dtrace，其次启动java应用的时候加上参数`-XX:+ExtendedDTraceProbes`，查看USDT probe：
+下面我们用openjdk为例，说明用户空间的静态分析方法。
+
+首先需要你的JDK启用了enable-dtrace，其次启动java应用的时候加上参数`-XX:+ExtendedDTraceProbes`，查看USDT probe：
 
 ``` shell
 readelf -n /usr/lib/jvm/java-10-openjdk/lib/server/libjvm.so
@@ -453,10 +467,10 @@ Displaying notes found in: .note.stapsdt
     Name: method__compile__begin
 
 ```
-确保出处中有stapsdt字样
+确保出处中有stapsdt字样，说明你的jdk启用了dtrace。
 
 #### ftrace
-我们用method__entry为例，操作如何通过ftrace来trace该probe。参考前面uprobe event的定义`p[:[GRP/]EVENT] PATH:OFFSET [FETCHARGS] : Set a uprobe`，我们需要找到method__entry在libjvm.so中的位置，可以通过readelf找到：
+我们用method__entry这个probe为例，讲述如何通过ftrace来trace该probe。参考前面uprobe event的定义`p[:[GRP/]EVENT] PATH:OFFSET [FETCHARGS] : Set a uprobe`，我们需要找到method__entry在libjvm.so中的位置，可以通过readelf找到：
 
 ``` shell
 [root@tacyArch tacy]# readelf -n /usr/lib/jvm/java-10-openjdk/lib/server/libjvm.so |tail +2659 -|head -5 -
@@ -466,7 +480,7 @@ Displaying notes found in: .note.stapsdt
     Location: 0x0000000000bd21e5, Base: 0x0000000000dbb1b2, Semaphore: 0x0000000000000000
     Arguments: -8@%rax 8@%rdx -4@%ecx 8@%rsi -4@%edi 8@%r8 -4@%r9d
 ```
-method__entry的位置在0x0000000000bd21e5，应为libjvm.so是一个共享库，所以这个地址可以直接使用（如果非共享库，你还需要找到程序的base加载地址，location-base得到偏移）。
+method__entry的位置在0x0000000000bd21e5，因为libjvm.so是一个共享库，所以这个地址可以直接使用（如果非共享库，你还需要找到程序的base加载地址，通过公式：location - base load address，计算得到偏移）。
 
 readelf的输出中，可以看到method__entry的arguments，总共有7个（这里我也没搞明白为啥register的使用不用遵守System V ABI AMD64规范），具体每个参数的定义就需要去看代码了，我机器上找不到stp文件，只能看在线[stp](https://github.com/mpujari/systemtap-tapset-openjdk9/blob/master/tapset-1.8.0/hotspot-1.8.0.stp.in#L411)，引用在下面：
 

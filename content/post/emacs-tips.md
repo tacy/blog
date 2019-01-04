@@ -1,6 +1,5 @@
 ---
 title: "emacs notes"
-
 date: 2013-09-28
 lastmod: 2019-01-04
 draft: false
@@ -16,6 +15,8 @@ contentCopyright: true
 # reward: false
 # mathjax: false
 ---
+# EMACS
+有任何操作问题，建议参考[Xha Emacs](http://ergoemacs.org/index.html)，我有操作问题一般都能在这里找到答案。
 
 # Display
 ## too long line highlight
@@ -58,10 +59,15 @@ contentCopyright: true
 |               |                   |
 
 # Coding
+
+``` shell
+
 | key sequence | comment        |
 |--------------+----------------|
 | M-;          | comment coding |
 |              |                |
+```
+
 # Replace
 替换字符串有很灵活的方式，比如我需要替换如下字符串组用序列数字：
 ``` shell
@@ -228,6 +234,9 @@ Copy to Clipboard: `S-c`, Paste from Clipboard: `S-v`
 ### Dired ###
 ```
 ^            dired-up-directory
+<remap>      dired-toggle-read-only                  切换到编辑模式后，可以对文件名做批量操作，C-c C-c提交
+%-m          dired-mark-files-regexp                 mark file by regex
+Q            dired-do-find-regexp-and-replace        在所有mark文件里面，做查找替换
 ```
 
 ### Helm ###
