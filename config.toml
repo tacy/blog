@@ -2,7 +2,7 @@
 # If you want to see the full configuration, please check `full-config.toml` .
 # And see https://gohugo.io/getting-started/configuration/ .
 
-baseURL = "http://localhost:1313/"
+baseURL = "http://tacy.github.io/"
 title = "Tacy - Notes"
 enableRobotsTXT = true
 enableEmoji = true
@@ -56,7 +56,7 @@ defaultContentLanguage = "en"           # Default language to use
   rssFullContent = true     # if false, Rss feed instead of the summary
 
   # site info (optional)                                  # 站点信息（可选，不需要的可以直接注释掉）
-  logoTitle = "Tacy"        # default: the title value    # 默认值: 上面设置的title值
+  logoTitle = "Tacy's notes"        # default: the title value    # 默认值: 上面设置的title值
   keywords = ["Tacy", "tech","life", "linux", "performance", "kubernetes","golang","java","troubleshooting"]
   description ="工作的一点总结，以及生活的点滴感悟，你就当我在扯淡."
 
