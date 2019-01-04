@@ -6,19 +6,16 @@ menu: "main"
 weight: 50
 
 # you can close something for this content if you open it in config.toml.
-comment: false
+comment: true
 mathjax: false
 ---
 
-Hugo is a static site engine written in Go.
+IT老民工，一个女儿的爸爸，会点编程，喜欢Linux和开源，什么都会点，什么都不精通，喜欢解决技术问题，对新教育兴趣浓厚。
 
+工作环境： archlinux/emacs/mbp/vscode/android
 
-It makes use of a variety of open source projects including:
+这个blog用hugo和github page支撑，emacs编写
 
-* [Cobra](https://github.com/spf13/cobra)
-* [Viper](https://github.com/spf13/viper)
-* [J Walter Weatherman](https://github.com/spf13/jWalterWeatherman)
-* [Cast](https://github.com/spf13/cast)
+就这样。
 
-Learn more and contribute on [GitHub](https://github.com/gohugoio).
-
+我的社交信息都在下面，欢迎关注
