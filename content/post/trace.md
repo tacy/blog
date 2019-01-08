@@ -473,7 +473,7 @@ Displaying notes found in: .note.stapsdt
 我们用method__entry这个probe为例，讲述如何通过ftrace来trace该probe。参考前面uprobe event的定义`p[:[GRP/]EVENT] PATH:OFFSET [FETCHARGS] : Set a uprobe`，我们需要找到method__entry在libjvm.so中的位置，可以通过readelf找到：
 
 ``` shell
-[root@tacyArch tacy]# readelf -n /usr/lib/jvm/java-10-openjdk/lib/server/libjvm.so |tail +2659 -|head -5 -
+[root@tacyArch tacy]# readelf -n /usr/lib/jvm/java-10-openjdk/lib/server/libjvm.so |grep -A5 NT_STAPSDT
   stapsdt              0x00000062       NT_STAPSDT (SystemTap probe descriptors)
     Provider: hotspot
     Name: method__entry
@@ -482,7 +482,7 @@ Displaying notes found in: .note.stapsdt
 ```
 method__entry的位置在0x0000000000bd21e5，因为libjvm.so是一个共享库，所以这个地址可以直接使用（如果非共享库，你还需要找到程序的base加载地址，通过公式：location - base load address，计算得到偏移）。
 
-readelf的输出中，可以看到method__entry的arguments，总共有7个（这里我也没搞明白为啥register的使用不用遵守System V ABI AMD64规范），具体每个参数的定义就需要去看代码了，我机器上找不到stp文件，只能看在线[stp](https://github.com/mpujari/systemtap-tapset-openjdk9/blob/master/tapset-1.8.0/hotspot-1.8.0.stp.in#L411)，引用在下面：
+readelf的输出中，可以看到method__entry的arguments，总共有7个（这里我也没搞明白为啥register的使用不用遵守System V ABI AMD64规范），具体每个参数的定义就需要去看代码了，我机器上找不到stp文件，只能看在线[stp](https://github.com/mpujari/systemtap-tapset-openjdk9/blob/master/tapset-1.8.0/hotspot-1.8.0.stp.in#L411)，有源代码也可以搜索源代码，用关键字`SharedRuntime::dtrace_method_entry`搜索，我的openjdk10在文件`hotspot/share/runtime/sharedRuntime.cpp`中，引用在下面：
 
 ``` shell
 /* hotspot.method_entry (extended probe)
@@ -524,7 +524,7 @@ probe hotspot.method_entry =
  http-nio-8080-e-31173 [002] d... 51704.628476: method_entry: (0x7f80e000d1e5) arg1=25 arg2="hello/GreetinggetContent&()Ljava/lang/String;" arg3=14 arg4="getContent&()Ljava/lang/String;" arg5=10 arg6="()Ljava/lang/String;" arg7=20
 ```
 
-上面我们用grep来过滤我们想看到的class，其实不用这么麻烦，参考events的filter，你可以直接过滤掉你不想看到的内容：
+上面我们用grep来过滤我们想看到的class，其实不用这么麻烦，参考events的filter[^14]，你可以直接过滤掉你不想看到的内容：
 
 ``` shell
 [root@tacyArch tracing]# echo 'arg2 ~ "hello*"' > events/uprobes/method_entry/filter
@@ -672,3 +672,5 @@ dynamic symbol是指动态链接的程序对外依赖的共享库symbol，程序
 [^12]: [iovisor bcc](https://github.com/iovisor/bcc/blob/master/INSTALL.md)
 
 [^13]: [Choosing a Linux Tracer (2015)](http://www.brendangregg.com/blog/2015-07-08/choosing-a-linux-tracer.html)
+
+[^14]: [Event Tracing](https://www.kernel.org/doc/Documentation/trace/events.txt)
