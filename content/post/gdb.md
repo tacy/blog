@@ -15,7 +15,7 @@ contentCopyright: true
 # reward: false
 # mathjax: false
 ---
-gdb是linux下最重要的debug工具，对于问题分析，非常有帮助。掌握gdb对于linux开发是必备的技能。
+linux下最重要的debug工具，对于问题分析，非常有帮助。掌握gdb对于linux开发和故障诊断是必备的技能。
 
 # info
 info addr <symbol>   #

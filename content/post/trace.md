@@ -480,7 +480,14 @@ Displaying notes found in: .note.stapsdt
     Location: 0x0000000000bd21e5, Base: 0x0000000000dbb1b2, Semaphore: 0x0000000000000000
     Arguments: -8@%rax 8@%rdx -4@%ecx 8@%rsi -4@%edi 8@%r8 -4@%r9d
 ```
-method__entry的位置在0x0000000000bd21e5，因为libjvm.so是一个共享库，所以这个地址可以直接使用（如果非共享库，你还需要找到程序的base加载地址，通过公式：location - base load address，计算得到偏移）。
+method__entry的位置在0x0000000000bd21e5，代表该symbol在libjvm.so中的偏移，直接使用
+
+偏移地址需要多解释一下，共享类库(.so)的偏移一般可以直接使用，但是可执行文件需要分情况，有些可执行文件启用了PIE，这类文件和共享类库类似，偏移也可以直接使用，有些没有启用PIE，这类地址需要减去加载的base地址（例如0x400000）。一般情况情况不会弄错，因为启用了PIE的可执行文件，你看到的地址会小于加载的base地址，减了之后就编程负数了，这显然不正确，而且启用了PIE的可执行文件，一般你查看的时候显示也是shared object，例如：
+
+``` 1c-enterprise
+[root@tacyArch tacy]# file /usr/bin/zsh
+/usr/bin/zsh: ELF 64-bit LSB shared object, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, for GNU/Linux 3.2.0, BuildID[sha1]=13f8b646263f84e3a6b12418b6d328a5c9ef835a, stripped
+```
 
 readelf的输出中，可以看到method__entry的arguments，总共有7个（这里我也没搞明白为啥register的使用不用遵守System V ABI AMD64规范），具体每个参数的定义就需要去看代码了，我机器上找不到stp文件，只能看在线[stp](https://github.com/mpujari/systemtap-tapset-openjdk9/blob/master/tapset-1.8.0/hotspot-1.8.0.stp.in#L411)，有源代码也可以搜索源代码，用关键字`SharedRuntime::dtrace_method_entry`搜索，我的openjdk10在文件`hotspot/share/runtime/sharedRuntime.cpp`中，引用在下面：
 
@@ -645,7 +652,7 @@ You can now use it in all perf tools, such as:
 ## 总结
 上面介绍的内容，操作起来有一定复杂度，大牛Brendan Gregg提供了[perf-tools](https://github.com/brendangregg/perf-tools)工具集来简化操作，里面提供了很多非常实用的工具，大力推荐。另外大牛的[blog](http://www.brendangregg.com/blog/2015-07-03/hacking-linux-usdt-ftrace.html)建议反复阅读
 
-ftrace最大的问题是不可编程，无法做更多扩展，但是它不需要太新的kernel，对目前很多生产环境来说，这非常关键，而且ftrace也在持续改进，建议follow大牛@srostedt（kernel ftrace maintainer）。
+ftrace最大的问题是不可编程，无法做更多扩展，但是它不需要太新的kernel，对目前很多生产环境来说，这非常关键，而且ftrace也在持续改进，建议follow另一位大牛@srostedt（kernel ftrace maintainer）。
 
 至于目前最热门的ebpf/bcc[^12]，强烈建议学习，优点就是一句话：可编程。kernel至少都需要4.1（推荐4.8以上），RHEL7.6官方已经支持[^11]。
 

@@ -261,9 +261,12 @@ main:
 
 char * 指针64bit
 
-# PIE
+# PIE / PIC[^3][^4][^5]
 在我的archlinux上（2018年12月的更新），gcc默认启用了pic和pie，会导致加载地址随机：
 
+PIC全名Postion Independent Codes，实现共享库的加载地址不固定，地址需要loader在加载时确定。
+
+PIE是指Position Independent Executables, 实现可执行文件的加载地址不固定（没有PIE之前，可执行文件默认会从固定地址加载，例如0x400000作为base加载地址[^6]）。
 ```
 ➜  cat simple.c
 #include <stdio.h>
@@ -336,7 +339,7 @@ Symbol "main" is at 0x5555555551ec in a file compiled without debugging.
 ## 禁用PIE和PIC
 
 ```
-➜  binary-study gcc  -fno-PIC  -no-pie simple.c -o simple
+➜  binary-study gcc -no-pie simple.c -o simple
 ➜  binary-study objdump -t simple|grep text
 0000000000401050 l    d  .text  0000000000000000              .text
 0000000000401090 l     F .text  0000000000000000              deregister_tm_clones
@@ -370,15 +373,105 @@ Breakpoint 1, 0x00000000004011dd in main ()
 00404000-00405000 rw-p 00003000 08:06 10358659                           /home/tacy/workspace/binary-study/simple
 
 ```
+
+## 启用enable-default-pie编译选项的gcc
+
+如果你的gcc启用了enable-default-pie，那么你编译程序的时候，默认就带上`-fPIC -fPIE`参数（可以通过-Q -v观察）
+
+
+想要禁用pic/pie，按照下面方式编译：
+
+``` shell
+➜  binary-study> gcc -mcmodel=large -fno-PIC -c piepic.c -o piepic.o
+➜  binary-study> gcc -mcmodel=large -no-pie -Wl,-O1,--sort-common,--as-needed,-z,relro,-z,now  -shared -o libpiepic.so piepic.o
+➜  binary-study> file libpiepic.so
+libpiepic.so: ELF 64-bit LSB shared object, x86-64, version 1 (SYSV), dynamically linked, BuildID[sha1]=3b01764ad66d87aa17a43c5cc52ccae070638ad6, not stripped
+➜  binary-study readelf -r libpiepic.so
+
+Relocation section '.rela.dyn' at offset 0x3f8 contains 12 entries:
+  Offset          Info           Type           Sym. Value    Sym. Name + Addend
+0000000010ef  000000000008 R_X86_64_RELATIVE                    400c
+0000000010f9  000000000008 R_X86_64_RELATIVE                    2000
+000000001114  000000000008 R_X86_64_RELATIVE                    2012
+000000003e08  000000000008 R_X86_64_RELATIVE                    10e0
+000000003e10  000000000008 R_X86_64_RELATIVE                    1090
+000000004000  000000000008 R_X86_64_RELATIVE                    4000
+000000001108  000300000001 R_X86_64_64       0000000000000000 printf@GLIBC_2.2.5 + 0
+00000000111e  000200000001 R_X86_64_64       0000000000000000 puts@GLIBC_2.2.5 + 0
+000000003fe0  000100000006 R_X86_64_GLOB_DAT 0000000000000000 _ITM_deregisterTMClone + 0
+000000003fe8  000400000006 R_X86_64_GLOB_DAT 0000000000000000 __gmon_start__ + 0
+000000003ff0  000500000006 R_X86_64_GLOB_DAT 0000000000000000 _ITM_registerTMCloneTa + 0
+000000003ff8  000600000006 R_X86_64_GLOB_DAT 0000000000000000 __cxa_finalize@GLIBC_2.2.5 + 0
+➜  binary-study> gcc -no-pie -o client_nopie client_piepic.c libpiepic.so
+➜  binary-study ./client_nopie   # ASLR设置为1的情况
+shared_v at 0xca3f800c
+hello
+value at 0x40403c
+➜  binary-study ./client_nopie   # ASLR设置为1的情况，设置为2，全部随机加载了
+shared_v at 0xa421900c
+hello
+value at 0x40403c
+```
+
+默认情况下的编译方式（启用pie/pic）：
+
+``` shell
+➜  binary-study gcc -c piepic.c -o piepic.o
+➜  binary-study gcc -Wl,-O1,--sort-common,--as-needed,-z,relro,-z,now  -shared -o libpiepic.so piepic.o
+➜  binary-study readelf -r libpiepic.so
+
+Relocation section '.rela.dyn' at offset 0x3f8 contains 7 entries:
+  Offset          Info           Type           Sym. Value    Sym. Name + Addend
+000000003dc8  000000000008 R_X86_64_RELATIVE                    1110
+000000003dd0  000000000008 R_X86_64_RELATIVE                    10c0
+000000004000  000000000008 R_X86_64_RELATIVE                    4000
+000000003fe0  000100000006 R_X86_64_GLOB_DAT 0000000000000000 _ITM_deregisterTMClone + 0
+000000003fe8  000400000006 R_X86_64_GLOB_DAT 0000000000000000 __gmon_start__ + 0
+000000003ff0  000500000006 R_X86_64_GLOB_DAT 0000000000000000 _ITM_registerTMCloneTa + 0
+000000003ff8  000600000006 R_X86_64_GLOB_DAT 0000000000000000 __cxa_finalize@GLIBC_2.2.5 + 0
+
+Relocation section '.rela.plt' at offset 0x4a0 contains 2 entries:
+  Offset          Info           Type           Sym. Value    Sym. Name + Addend
+000000003fd0  000200000007 R_X86_64_JUMP_SLO 0000000000000000 puts@GLIBC_2.2.5 + 0
+000000003fd8  000300000007 R_X86_64_JUMP_SLO 0000000000000000 printf@GLIBC_2.2.5 + 0
+➜  binary-study gcc -o client client_piepic.c libpiepic.so
+➜  binary-study ./client
+shared_v at 0x3d4d900c
+hello
+value at 0xb29303c
+➜  binary-study ./client
+shared_v at 0xbbe9700c
+hello
+value at 0xc892303c
+```
+
 不启用pic和pie，symbol的地址在编译的时候就确认了，可以直接使用
 
+0 > /proc/sys/kernel/randomize_va_space
+
 # gcc
+
+## 编译共享库
+gcc -march=x86-64 -mtune=generic -O2 -pipe -fstack-protector-strong -fno-plt -fno-PIC -c piepic.c -o piepic.o
+
 显示编译选项启用情况： gcc -Q -v <input file>
 
+有main：
+gcc -fno-PIC  -no-pie -fno-stack-protector -c simple.c -o simple.o
+gcc -shared -no-pie -o libsimple.so simple.o  # no-pie必须在shared后面
+
 # resource
-1. ![Notes on x86-64 programming](/static/resource/x86-64.pdf)
-2. ![x86-64 Machine-Level Programming](/static/resource/asm64-handout.pdf)
+1. [Notes on x86-64 programming](/resource/x86-64.pdf)
+2. [x86-64 Machine-Level Programming](/resource/asm64-handout.pdf)
 
 [^1]: [stack frame for x86](https://www.cs.rutgers.edu/~pxk/419/notes/frames.html)
 
 [^2]: [stack frame for x64](Stack frame layout on x86-64)
+
+[^3]: [about ELF – PIE, PIC and else](https://codywu2010.wordpress.com/2014/11/29/about-elf-pie-pic-and-else/)
+
+[^4]: [Load-time relocation of shared libraries](https://eli.thegreenplace.net/2011/08/25/load-time-relocation-of-shared-libraries)
+
+[^5]: [Position Independent Code (PIC) in shared libraries on x64](https://eli.thegreenplace.net/2011/11/11/position-independent-code-pic-in-shared-libraries-on-x64)
+
+[^6]: [Why is 0x00400000 the default base address for an executable?](https://blogs.msdn.microsoft.com/oldnewthing/20141003-00/?p=43923)
