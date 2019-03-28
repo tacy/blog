@@ -99,6 +99,26 @@ dmidecode
 lscpu
 lshw
 hdparm
+
+## 查找网卡的插槽地址
+
+```
+[root@wfpprddb01 tacy]#lspci -vvv|grep -i 'Ethernet' -A10
+
+[root@wfpprddb01 tacy]# ethtool -i ens1f0
+driver: ixgbe
+version: 4.4.0-k
+firmware-version: 0x800003df
+expansion-rom-version:
+bus-info: 0000:43:00.0
+supports-statistics: yes
+supports-test: yes
+supports-eeprom-access: yes
+supports-register-dump: yes
+supports-priv-flags: no
+
+```
+
 # mouse & touchpad
 升级系统系统的时候, 容易把synaptics的配置弄丢了, 注意修改
 
@@ -148,6 +168,10 @@ EndSection
 
 ## cower
 aur包管理器, 可以查看安装的aur包, 是否由更新, 下载更新, 然后通过makepkg安装更新
+
+# mimetype
+`xdg-mime default org.gnome.Nautilus.desktop inode/directory`
+
 
 # tor
 pacman安装即可, 然后需要修改以下/etc/tor/torrc里面的配置, 缺省没有打开controller, 如果你需要编程调用, 需要打开该端口, 同时修改hashpasswd, hashpasswd可以通过'tor --hash-password yourpassws'获取.
@@ -379,6 +403,15 @@ net.ipv4.tcp_congestion_control=bbr
 
 lsmod|grep -i bbr
 ```
+## mtu
+ip link show |grep mtu
+ip link set eth0 mtu 9000  # (JUMBO frames)
+/etc/sysconfig/network-scripts/<interface>  add line 'MTU="9000"' or accroding to archlinux jumbo frames
+
+
+## 网卡bonding
+`teamdctl team0 state`
+
 
 ## software AP
 最简单的办法就是使用[create_ap](https://github.com/oblique/create_ap), 一条命令搞定`create_ap wlan0 wlan0 MyAccessPoint MyPassPhrase`
@@ -538,6 +571,10 @@ ss -x src /tmp/.X11-unix/*
 这是别人用brf写的一个监控unix socket的小工具，可以查看unix socket间的通讯记录
 用`ss -xlp`可以查看系统处于listen状态下的unix socket
 
+## offload
+ethtool -k ethY
+ethtool -K ethY tso on
+
 # Utils
 ## coreutils
 这个工具集里面的所有工具你都看一遍man，基本上都是些很常用的工具，例如：cat/mkdir/cp/rm/tail/head/sort/nohup/mv啥的
@@ -556,6 +593,15 @@ ss -x src /tmp/.X11-unix/*
 ## 其他
 man / debugfs / gdb / lsof
 
+## log
+last -n5 -x reboot shutdown
+ausearch -i -m system_boot,system_shutdown
+ethtool interface 查网卡速度 / 设置offload
+teamdctl team0 state
+
+## rhel
+### selinux
+getenforce
 # my server configuration
 https://www.digitalocean.com/community/tutorials/how-to-install-dropbox-client-as-a-service-on-centos-7
 https://www.digitalocean.com/community/tutorials/how-to-add-swap-on-centos-7

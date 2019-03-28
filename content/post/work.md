@@ -290,3 +290,13 @@ log agent:
    -- ?????
 
 接口规范怎么定义, 代码规范怎么定义.
+
+
+
+# 联通
+
+## oracle
+set linesize 250 pagesize 0 trims on tab off long 1000000
+column report format a220
+
+select DBMS_SQL_MONITOR.REPORT_SQL_MONITOR (sql_id=>'bcc7fda2tfuzp',report_level=>'ALL') report from dual;

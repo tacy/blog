@@ -18,19 +18,15 @@ contentCopyright: true
 
 编译之后产生的二进制文件，有很多种不同的格式，一般在linux下，elf是最常用的，如果没有特殊说明，这里指的都是elf格式的二进制文件
 
-二进制文件包括可运共享库
+# ELF
+## readelf
 
-``` shell
-\u279c  public git:(master) \u2717 file /lib/libc-2.28.so
-/lib/libc-2.28.so: ELF 64-bit LSB shared object, x86-64, version 1 (GNU/Linux), dynamically linked, interpreter /usr/lib/ld-linux-x86-64.so.2, BuildID[sha1]=81de091ea963d49b45f9536f4b0548dcabd03f0e, for GNU/Linux 3.2.0, not stripped
-\u279c  public git:(master) \u2717 fild /usr/lib/jvm/java-10-openjdk/lib/server/libjvm.so
-zsh: command not found: fild
-\u279c  public git:(master) \u2717 fil /usr/lib/jvm/java-10-openjdk/lib/server/libjvm.so
-zsh: command not found: fil
-\u279c  public git:(master) \u2717 file /usr/lib/jvm/java-10-openjdk/lib/server/libjvm.so
-/usr/lib/jvm/java-10-openjdk/lib/server/libjvm.so: ELF 64-bit LSB pie executable, x86-64, version 1 (GNU/Linux), dynamically linked, BuildID[sha1]=deaa14871e0101bc717a00461519385ebdb010fd, not stripped, too many notes (256)
-
-```
+* To retrieve a section header table:`readelf -S <object>`
+* To retrieve a program header table: `readelf -l <object>`
+* To retrieve a symbol table: `readelf -s <object>`
+* To retrieve the ELF file header data: `readelf -e <object>`
+* To retrieve relocation entries: `readelf -r <object>`
+* To retrieve a dynamic segment: `readelf -d <object>`
 
 # little endian & big endian
 little endian： 9A9B9C9D   =>   (9D->0x1000, 9C->0x1001, 9B->0x1002, 9A->0x1003)
@@ -449,6 +445,10 @@ value at 0xc892303c
 
 0 > /proc/sys/kernel/randomize_va_space
 
+# readelf
+elf格式工具，可以用来查看elf文件信息，例如segment，header，relocs等
+
+
 # gcc
 
 ## 编译共享库
@@ -463,6 +463,8 @@ gcc -shared -no-pie -o libsimple.so simple.o  # no-pie必须在shared后面
 # resource
 1. [Notes on x86-64 programming](/resource/x86-64.pdf)
 2. [x86-64 Machine-Level Programming](/resource/asm64-handout.pdf)
+3. [Introduction to the ELF Format](https://blog.k3170makan.com/2018/09/introduction-to-elf-format-elf-header.html)
+
 
 [^1]: [stack frame for x86](https://www.cs.rutgers.edu/~pxk/419/notes/frames.html)
 

@@ -35,6 +35,21 @@ Starting with Wireshark 2.0, the RSA key file is automatically matched against t
 ## 关于tcp segment len超过1500
 很可能是网卡支持tso, 同时打开了该功能, 应用层的拆包工作交给了网卡, 一般这种情况, 你能在对端看到正确的tcp segment len大小
 
+## TCP Full Window
+The Receiver advertises a TCP Window of 5000 byte.
+The Sender sends 5 packets with a TCP Len of 1000 each
+There is no ACK between those 5 packets
+Wireshark will mark the 5th packet with [TCP Window Full] as it has seen those advertized 5000 bytes, without an ACK
+
+## SACK
+下面是一个wireshark包截图
+![wireshark sack](/img/wireshark-sack.png)
+
+截图信息显示，接收端希望接受的下一个包的sequence号是16953，但是它已经收到了18413~22793的包了，没有接收到16953~18412，发送端可以根据这个ack，重传16953~18412。
+
+
+参考连接[TCP Selective Acknowledgments (SACK)](http://packetlife.net/blog/2010/jun/17/tcp-selective-acknowledgments-sack/)
+
 ## 如何查找一个session
 标识一个tcp链接通过src_ip:port  -> dst_ip:port, 过滤条件写上就行, 当然tcp port存在重用的情况, 所以你还需要加上session id啥的, 在cookie里面有
 
@@ -43,6 +58,9 @@ Starting with Wireshark 2.0, the RSA key file is automatically matched against t
 首先过滤包, 然后file -> export specified packets -> all packets
 也可以通过tshark来过滤, 一般可以
 
+
+# LUA
+## httpext.lua
 
 # 案例
 

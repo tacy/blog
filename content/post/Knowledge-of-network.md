@@ -61,6 +61,10 @@ the TCP timer granularity and minimum RTO to be on the order of microseconds
 [V09]. Such small minimum RTO values are not recommended for use on the
 global Internet.
 
+## tcp_fin_timeout
+主动断开连接方，会等待对方回FIN包，并且处于FIN-WAIT-2状态，tcp_fin_timeout用于控制FIN-WAIT-2状态的时间，如果超过设定时间没有接收到FIN包，回直接close连接，连接进入time_wait状态
+
+
 ## Fast Retransmit
 
 一般如果接受端收到乱序的包, 会立即发送dupack, 但是如果网络异常也会导致dupack, 所以发送端会等到duplicate ACK threshold or dupthresh达到, 然后就会重传包, 如果不支持sack, 一次只会重传一个包, 然后继续发送新包
