@@ -65,6 +65,16 @@ global Internet.
 主动断开连接方，会等待对方回FIN包，并且处于FIN-WAIT-2状态，tcp_fin_timeout用于控制FIN-WAIT-2状态的时间，如果超过设定时间没有接收到FIN包，回直接close连接，连接进入time_wait状态
 
 
+## tcp_retries2
+TCP retransmits an unacknowledged packet up to tcp_retries2 sysctl setting times (defaults to 15) using an exponential backoff timeout for which each retransmission timeout is between TCP_RTO_MIN (200 ms) and TCP_RTO_MAX (120 seconds). Once the 15th retry expires (by default), the TCP stack will notify the layers above (ie. app) of a broken connection.
+
+The value of TCP_RTO_MIN and TCP_RTO_MAX is hardcoded in the Linux kernel and defined by the following constants:
+```
+#define TCP_RTO_MAX ((unsigned)(120*HZ))
+#define TCP_RTO_MIN ((unsigned)(HZ/5))
+```
+Linux 2.6+ uses HZ of 1000ms, so TCP_RTO_MIN is ~200 ms and TCP_RTO_MAX is ~120 seconds. Given a default value of tcp_retries set to 15, it means that it takes 924.6 seconds before a broken network link is notified to the upper layer (ie. application), since the connection is detected as broken when the last (15th) retry expires.
+
 ## Fast Retransmit
 
 一般如果接受端收到乱序的包, 会立即发送dupack, 但是如果网络异常也会导致dupack, 所以发送端会等到duplicate ACK threshold or dupthresh达到, 然后就会重传包, 如果不支持sack, 一次只会重传一个包, 然后继续发送新包

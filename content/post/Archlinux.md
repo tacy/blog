@@ -1,7 +1,7 @@
 ---
 title: "archlinux notes"
 date: 2015-01-01
-lastmod: 2019-01-04
+lastmod: 2019-08-28
 draft: false
 tags: ["tech", "linux", "archlinux", "notes"]
 categories: ["tech"]
@@ -408,9 +408,98 @@ ip link show |grep mtu
 ip link set eth0 mtu 9000  # (JUMBO frames)
 /etc/sysconfig/network-scripts/<interface>  add line 'MTU="9000"' or accroding to archlinux jumbo frames
 
+## tune initial windows size
+
+``` 1c-enterprise
+# ip route change default via 24.13.158.1 dev enp0s2 initcwnd 10 initrwnd 10
+# ip route change 10.1.1.0/24 dev enp0s3 proto kernel scope link src 10.1.1.100 initcwnd 10 initrwnd 10
+# ip route change 24.13.158.0/23 dev enp0s2 proto kernel scope link src 24.13.159.33 initcwnd 10 initrwnd 10
+# ip route show
+default via 24.13.158.1 dev enp0s2  initcwnd 10  initrwnd 10
+10.1.1.0/24 dev enp0s3  proto kernel  scope link  src 10.1.1.100  initcwnd 10  initrwnd 10
+24.13.158.0/23 dev enp0s2  proto kernel  scope link  src 24.13.159.33  initcwnd 10 initrwnd 10
+
+```
+
+## tcp connection
+### keepalive
+需要设置so_keepalive，在创建socket的时候，大部分网络应用都支持相关配置项。设置该选项之后，tcp连接空闲时间超过tcp_keepalive_time，linux会发送keepalive probe，对端回包，确认连接有效；如果没有接收到对端的回包，linux会在tcp_keepalive_intvl指定的时间间隔之后，重新发送probe，最多发送tcp_keepalive_probes个probe，如果依然没有回包，连接会被断开。
+
+当两端之间存在其他影响连接状态设备时，例如中间有防火墙，keepalive就非常必要，在应用层实现的keepalive，大部分只是持有连接，不会发送保持连接的probe包，这类的keepalive时间稍长，很容易被防火墙之类的设备断开。
+
+
+### so_linger[^2][^3]
+tcp连接的断开有两种情况，一种是正常的四次挥手，一种是直接用reset包断开（abortive close），so_linger选项可以用来控制连接的断开行为。当设置so_linger为on，linux会等待发送队列中的数据发送完成，然后正常断开连接，或者等待so_linger time设置的超时时间，如果在这个时间之内依然没有发送完成，连接也会断开；如果设置为off，连接会丢弃掉所有数据，直接发送reset包断开连接。
+
+一般不会采用发送reset包的方式断开连接，除非客户端没有正常关闭连接，导致服务端大量timeout（server active close）
+
+
+## tcp tuning
+
+``` 1c-enterprise
+### /etc/sysctl.d/02-netIO.conf
+### Kernel settings for TCP
+
+# Provide adequate buffer memory.
+# rmem_max and wmem_max are TCP max buffer size
+# settable with setsockopt(), in bytes
+# tcp_rmem and tcp_wmem are per socket in bytes.
+# tcp_mem is for all TCP streams, in 4096-byte pages.
+# The following are suggested on IBM's
+# High Performance Computing page
+net.core.rmem_max = 16777216
+net.core.wmem_max = 16777216
+net.core.rmem_default = 16777216
+net.core.wmem_default = 16777216
+net.ipv4.tcp_rmem = 4096 87380 16777216
+net.ipv4.tcp_wmem = 4096 87380 16777216
+# This server might have 200 clients simultaneously, so:
+#   max(tcp_wmem) * 2 * 200 / 4096
+net.ipv4.tcp_mem = 1638400 1638400 1638400
+
+# Disable TCP SACK (TCP Selective Acknowledgement),
+# DSACK (duplicate TCP SACK), and FACK (Forward Acknowledgement)
+net.ipv4.tcp_sack = 0
+net.ipv4.tcp_dsack = 0
+net.ipv4.tcp_fack = 0
+
+# Disable the gradual speed increase that's useful
+# on variable-speed WANs but not for us
+net.ipv4.tcp_slow_start_after_idle = 0
+```
 
 ## 网卡bonding
 `teamdctl team0 state`
+
+
+[^1]## nic bind irq
+1. 先看看网卡现在的中断使用情况
+
+``` 1c-enterprise
+# grep eth0 /proc/interrupts
+32:   0     140      45       850264      PCI-MSI-edge      eth0
+```
+上面显示eth0用的是32号中断，中断的处理cpu大部分在cpu4上，2和3上也有一些
+
+2. 看当前的绑定情况
+
+``` 1c-enterprise
+# cat /proc/irq/32/smp_affinity
+f
+```
+上面显示irq 32没有绑定具体的cpu，任意cpu都可以
+
+3. 强制绑定到某个cpu
+
+``` 1c-enterprise
+# echo 1 >/proc/irq/32/smp_affinity
+# cat /proc/irq/32/smp_affinity
+1
+```
+上面的操作我们强制绑定的cpu1上，所有这个网卡的中断都由cpu1处理。
+
+在多队列网卡的时候，可以给每个队列绑定一个网卡，这样会有更好的性能。
+
 
 
 ## software AP
@@ -567,6 +656,11 @@ ss -x src /tmp/.X11-unix/*
   Find all local processes connected to X server.
 ```
 
+#### one line
+1. 查看长期闲置的连接
+`ss -tni 'sport = :8080'|grep -v Recv|sed 'N;s/\n/ /g'|grep wscale|cut -d':' -f1,2,3,14,15|sed 's/lastrcv//g'|sort -t':' -nk5|tail -10`
+
+
 ## sockdump
 这是别人用brf写的一个监控unix socket的小工具，可以查看unix socket间的通讯记录
 用`ss -xlp`可以查看系统处于listen状态下的unix socket
@@ -605,3 +699,9 @@ getenforce
 # my server configuration
 https://www.digitalocean.com/community/tutorials/how-to-install-dropbox-client-as-a-service-on-centos-7
 https://www.digitalocean.com/community/tutorials/how-to-add-swap-on-centos-7
+
+[^1]: [INTERRUPTS AND IRQ TUNING](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/6/html/performance_tuning_guide/s-cpu-irq)
+
+[^2]: [tcp option so-linger zero when its required](https://stackoverflow.com/questions/3757289/tcp-option-so-linger-zero-when-its-required)
+
+[^3]: [Resetting a TCP connection and SO_LINGER](http://deepix.github.io/2016/10/21/tcprst.html)

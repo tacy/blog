@@ -300,3 +300,12 @@ set linesize 250 pagesize 0 trims on tab off long 1000000
 column report format a220
 
 select DBMS_SQL_MONITOR.REPORT_SQL_MONITOR (sql_id=>'bcc7fda2tfuzp',report_level=>'ALL') report from dual;
+
+
+
+java.io.InputStreamReader reader = new java.io.InputStreamReader(in);
+java.io.BufferedReader iin = new java.io.BufferedReader(reader);
+String readed;
+while ((readed = iin.readLine()) != null) {
+  System.out.println(readed);
+}

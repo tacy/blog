@@ -19,3 +19,6 @@ contentCopyright: true
 # one-liners
 *  查看某个程序消耗的内存情况
 ps -eo comm,rss|grep chrome|tr -s ' '|cut -d' ' -f2|paste -sd+ - | bc
+
+* 排序程序消耗内存情况
+ ps -eo comm,rss|awk '{arr[$1]+=$2} END {for (i in arr) {print i,arr[i]}}'|sort -k 2 -g

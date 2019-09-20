@@ -322,6 +322,10 @@ Process 369 attached with 36 threads - interrupt to quit
 别人使用，你需要先去[[https://index.docker.io/][Docker Index]]注册一个帐号，然后通过docker login命令登入，再通
 过docker push即可，具体我也没有试过，等我把DB2的Image弄好了，或许去提交一个玩玩。
 
+### alpine
+轻量级容器，代理设置export https_proxy=http://127.0.0.1:9001，主要不能省略http://
+
+
 ## TIPS
 ### 进入正在运行的容器
 docker处于运行状态的容器如果在交互模式，你能通过screen/tmux等方式实现新开窗口运

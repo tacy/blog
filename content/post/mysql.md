@@ -354,6 +354,16 @@ crontab -e (注意是设置tacy_lee的定时任务)
 ```
 
 
+# tips
+## 导出csv
+
+select * from sample INTO OUTFILE '/var/lib/mysql-files/orders.csv'
+
+## 常用sql
+
+select deptid,COUNT(*) as TotalCount from staff group by deptid having count(*) > 2
+
+
 [^1]: [Installing Percona XtraBackup on Red Hat Enterprise Linux and CentOS](https://www.percona.com/doc/percona-xtrabackup/LATEST/installation/yum_repo.html)
 
 [^2]: [How To Configure MySQL Backups with Percona XtraBackup on Ubuntu 16.04](https://www.digitalocean.com/community/tutorials/how-to-configure-mysql-backups-with-percona-xtrabackup-on-ubuntu-16-04)
