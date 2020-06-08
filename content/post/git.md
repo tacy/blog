@@ -181,7 +181,14 @@ Git won't do a diff of files that have been add-ed to your staging area without 
 
 # github
 ## 永久删除文件
-`$ java -jar bfg.jar --strip-blobs-bigger-than 100M some-big-repo.git`
+``` shell
+$ git clone --mirror git:@github.com:tacy/some-big-repo.git
+$ java -jar bfg.jar --strip-blobs-bigger-than 100M some-big-repo.git
+$ cd some-big-repo.git
+$ git reflog expire --expire=now --all && git gc --prune=now --aggressive
+$ git push
+
+```
 
 
 # 乐乐屋同步
