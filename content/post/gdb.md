@@ -18,16 +18,63 @@ contentCopyright: true
 linux下最重要的debug工具，对于问题分析，非常有帮助。掌握gdb对于linux开发和故障诊断是必备的技能。
 
 # info
-info addr <symbol>   #
-info symbol <addr>   # 显示地址的symbol名称
-info line *<addr>    # 显示地址的代码行（需要debug信息）
+(gdb) info addr <symbol>   #
+(gdb) info symbol <addr>   # 显示地址的symbol名称
+(gdb) info line *<addr>    # 显示地址的代码行（需要debug信息）
+(gdb) info breakpoints
 
 # breakpoint
- b *0x65ab0          # 在地址0x65ab0设置断点
+(gdb) b *0x65ab0          # 在地址0x65ab0设置断点
+(gdb) delete breakpoints 4
+(gdb) condition 2 *p == 'r'
+
+# jump
+(gdb) jump *0x403EC2       # this is like set $pc = 0xADDR; continue;
+
 # disas
 获取symbol的汇编代码
-dissa <addr>
-dissa <symbol>
+(gdb) set disassembly-flavor intel
+(gdb) dissa <addr>
+(gdb) dissa <symbol>
+(gdb) disassemble 0x400ae0,+0x10   # use +length to specify number of bytes to disassemble.
+
+# Displays the memory contents
+(gdb) x/[length][format] address_expression  # o - octal/x - hexadecimal/d - decimal/u - unsigned decimal/t - binary/f - floating point/a - address/c - char/s - string/i - instruction/b - byte/h - halfword (16-bit value)/w - word (32-bit value)/g - giant word (64-bit value)
+
+``` shell
+(gdb) x testArray
+0xbfffef7b: 0x33323130
+(gdb) x/c testArray
+0xbfffef7b: 48 '0'
+(gdb) x/5c testArray
+0xbfffef7b: 48 '0' 49 '1' 50 '2' 51 '3' 52 '4'
+(gdb) x/2c
+0xbfffef80: 53 '5' 54 '6'
+(gdb) x/wx testArray
+0xbfffef7b: 0x33323130
+(gdb) x/2hx testArray
+0xbfffef7b: 0x3130 0x3332
+(gdb) x/gx testArray
+0xbfffef7b: 0x3736353433323130
+(gdb) x/s testArray
+0xbfffef7b: "0123456789ABCDEF"
+(gdb) x/5bx testArray
+0xbfffef7b: 0x30 0x31 0x32 0x33 0x34
+(gdb) x/5i $pc
+=> 0x8048477 <main()+58>: mov $0x0,%eax
+0x804847c <main()+63>: mov 0x1c(%esp),%edx
+0x8048480 <main()+67>: xor %gs:0x14,%edx
+0x8048487 <main()+74>: je 0x804848e <main()+81>
+0x8048489 <main()+76>: call 0x8048310 <__stack_chk_fail@plt>
+```
+
+# ptype
+显示数据类型定义, 方便查看数据结构定义，查询结构成员
+(gdb) whatis sock        # 打印表达式的数据类型
+(gdb) ptype struct sock
+
+# offset
+(gdb) print (int)&((struct sock *) 0)->__sk_common
 
 # strip[^1]
 如果文件被strip了，objdump/readelf/nm就无法找到任何静态symbols信息，但是gdb支持查找strip出来的debuginfo文件，RHEL的所有包都包括了对应的debuginfo包，对于问题分析非常有帮助。
@@ -90,5 +137,9 @@ When gdb is started, use the bt command to print the backtrace:
 (gdb) directory ~/workspace/archlinux-linux/
 Source directories searched: /home/tacy/workspace/archlinux-linux:$cdir:$cwd
 ```
+
+
+## centos
+cd /usr/lib/debug/lib/modules/`uname -r`/
 
 [^1]: [Debugging Information in Separate Files](https://sourceware.org/gdb/onlinedocs/gdb/Separate-Debug-Files.html)

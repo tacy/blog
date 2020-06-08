@@ -30,6 +30,33 @@ $ python manage.py shell
 from polls.models import Question, Choice
 >>> q = Question(question_text="What's new?", pub_date=timezone.now())
 
+# database
+## 在同一个事物里面, 如果用save()保存实体, 同一记录的不同实例会互相覆盖, 例如:
+
+``` python
+   a = Order.object.get(id=1)
+   b = Order.object.get(id=1)
+   b.quantity=3
+   b.save()
+   a.title='name'
+   a.save()
+```
+上面代码, b.quantity的修改会被覆盖, 可以修改成`a.save(update_fields=['quantity'])`
+
+## queryset
+``` python
+	orders = Order.objects.filter(id=2988)
+	orders[0].quantity = 108
+	orders[0].save(update_fields=['quantity'])
+```
+上面代码, 没有任何效果, 记录不会更新, 需要写成下面这样
+``` python
+	orders = Order.objects.filter(id=2988)
+	o = orders[0]
+	o.quantity = 108
+	o.save(update_fields=['quantity'])
+```
+
 # Save the object into the database. You have to call save() explicitly.
 >>> q.save()
 

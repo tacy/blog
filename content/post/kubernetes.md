@@ -265,7 +265,7 @@ crc = str(hex(crc))[2:]
 print("52:54:%s%s:%s%s:%s%s:%s%s" % tuple(crc))
 ```
 
-##### run-qemu.sh #####
+##### run-qemu.sh #####[^11]
 
 ``` sh
 #!/bin/bash
@@ -344,9 +344,7 @@ IFACE=$(comm -13 <(echo "$precreationg") <(echo "$postcreation"))
 
 MACADDR=`/home/tacy/workspace/qemu/vm/qemu-mac-hasher.py ${NAME}`
 
-qemu-system-x86_64 -name ${NAME} -cpu host -m ${MEMORY} -smp cores=2,threads=1,sockets=1 -machine type=pc,accel=kvm -net nic,macaddr=${MACADDR},model=virtio -net tap,vhost=on,ifname="$IFACE" -serial telnet:localhost:${SP},server,nowait,nodelay -monitor tcp:127.0.0.1:${MP},server,nowait,nodelay -device virtio-scsi-pci,id=scsi -device scsi-hd,drive=hd -drive file=${IMAGE},format=qcow2,cache=writeback,discard=unmap,if=none,id=hd -drive file=/home/tacy/workspace/qemu/vm/seed.iso,if=virtio -nographic
-
-# 注意, 这里cache可以考虑用directsync, 然后加上io=native, 这样磁盘性能应该是最优的.
+qemu-system-x86_64 -name ${NAME} -cpu host -m ${MEMORY} -smp cores=2,threads=1,sockets=1 -machine type=pc,accel=kvm -net nic,macaddr=${MACADDR},model=virtio -net tap,vhost=on,ifname="$IFACE" -serial telnet:localhost:${SP},server,nowait,nodelay -monitor tcp:127.0.0.1:${MP},server,nowait,nodelay -device virtio-blk-pci,drive=hd -drive file=${IMAGE},format=qcow2,cache=none,aio=native,discard=unmap,if=none,id=hd -drive file=/home/tacy/workspace/qemu/vm/seed.iso,if=virtio -nographic
 
 sudo ip link set dev $IFACE down &> /dev/null
 sudo ip tuntap del $IFACE mode tap &> /dev/null
@@ -1343,3 +1341,5 @@ kubelet集成cadvisor之后， 导致kubelet性能消耗很大， 带来很多�
 [^9]: [Allow fieldSelectors to match arbitrary values ](https://github.com/kubernetes/kubernetes/pull/28112)
 
 [^10]: [Generic field selectors #1362](https://github.com/kubernetes/kubernetes/issues/1362)
+
+[^11]: [Gentoo qemu option](https://wiki.gentoo.org/wiki/QEMU/Options)

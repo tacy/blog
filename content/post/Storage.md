@@ -17,7 +17,12 @@ contentCopyright: true
 # mathjax: false
 ---
 
-# 硬盘IOPS[fn:3][fn:4]
+# 硬盘IOPS[fn:3][fn:4][^1]
+
+机械硬盘IO时间组成：
+Rotational Delay: 盘旋转时间(盘面旋转半圈的时间，RPM/60/2)
+Seek time: 寻道时间，产品参数
+Transfer delay: 读取和传输时间 (读取8K数据为例, 6Gbps的盘, 4ms seek time, 2ms Rota latency, (1000ms-4ms-2ms)/((6Gbps/8)*1024*1024/8). )
 
 | size |   RPM | Seek time | Avg Rota latency | Throught | Random IOPS      |
 |      |       |           | 0.5/(RPM/60)     |          | 1/(seek+latency) |
@@ -41,7 +46,7 @@ contentCopyright: true
 一个250IOPS的存储，一半读一半写，那就意味着你需要准备(250*50% + 250*50%*6)=875
 的IOPS存储。
 
-# Latency comparison[fn:5]
+# Latency comparison[fn:5][^2]
 
 ``` shell
 L1 cache reference                            0.5 ns
@@ -73,3 +78,7 @@ Send packet CA->Netherlands->CA     150,000,000   ns  150    ms
 [fn:5] [[https://gist.github.com/jboner/2841832][Latency Numbers Every Programmer Should Know]]
 
 [fn:6] [[http://www.wmarow.com/strcalc/][IOPS Calculator]]
+
+[^1]: [Storage performance: IOPS, latency and throughput](http://rickardnobel.se/storage-performance-iops-latency-throughput/)
+
+[^2]: [Latency Numbers Every Programmer Should Know](https://people.eecs.berkeley.edu/~rcs/research/interactive_latency.html)

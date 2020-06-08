@@ -251,6 +251,9 @@ Q            dired-do-find-regexp-and-replace        在所有mark文件里面�
 grep当前buffer目录下的文件: `C-s`会对当前buffer进行grep, `. C-s`会对当前目录进行匹配, 注意不会查找子目录, `C-u C-s`会对子目录也匹配
 ##### edit grep result
 先保存grep result, by `C-x C-s`, 然后通过wgrep插件的`C-c C-p`进入编辑模式, `C-c C-e`应用修改, 注意buffer并没有保存到磁盘.
+##### helm-projectile
+`C-c p h`
+
 
 ### Registor ###
 

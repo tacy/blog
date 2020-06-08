@@ -353,6 +353,17 @@ crontab -e (注意是设置tacy_lee的定时任务)
 0 */3 * * * /usr/local/bin/backup-mysql.sh
 ```
 
+# event
+
+set global schedule_event=ON
+
+``` shell
+create event shippingdbpriority on schedule every 1 day starts '2020-05-26 06:30:00' do update stock_shippingdb set priority=true where db_number in (select db_number from (select orderid,db_number,receiver_idcard,sum(if(o.status='待发货',0,1)) stat from stock_order o inner join stock_shippingdb s on o.shippingdb_id=s.id where o.shipping_id=25 and o.status not in ('已发货','已删除') group by receiver_idcard,shippingdb_id having stat=0) t1 inner join (select receiver_idcard from (select distinct receiver_idcard,orderid from stock_order where status not in ('已发货','已删除')) tt group by receiver_idcard having count(*)>1) t2 on t1.receiver_idcard=t2.receiver_idcard);
+
+show events
+drop event shippingdbpriority
+select * from information_schema.events
+```
 
 # tips
 ## 导出csv

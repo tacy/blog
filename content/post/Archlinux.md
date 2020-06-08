@@ -15,6 +15,46 @@ contentCopyright: true
 # reward: false
 # mathjax: false
 ---
+# my ubuntu machine
+theme: flat-remix
+disable dock: mv /usr/share/gnome-shell/extensions/ubuntu-dock@ubuntu.com{.,bak}
+
+gnome tweaks ~ keyboard & Mouse ~ Compose Key ~ Right Super
+keyboard shortcut ~ set 'show the overview'  ~ super + space
+
+shurtcut:
+alt + space   ->   switch input method
+ctrl + tab    ->   switch application
+
+## keymap[^6]
+通过如下配置自定义layout:
+``` shell
+~ » cat /usr/share/X11/xkb/symbols/tacywin                                                                                                  tacy@tacy-linux-x1
+// Alt_L to Ctrl_L, Super_L to Alt_L, Ctrl_L to Alt_L, Alt_R to Ctrl_R, PrtSc to Alt_R, Ctrl_R to Print
+partial modifier_keys
+xkb_symbols "tacy_win" {
+    key <CAPS> { [ Control_L, Control_L ] };
+    key <LALT> { [ Control_L, Control_L ] };
+    key <LWIN> { [ Alt_L, Meta_L ] };
+    key <LCTL> { [ Super_L, Super_L ] };
+    key <RALT> { [ Control_R, Control_R ] };
+    key <PRSC> { [ Alt_R, Meta_R ] };
+    key <RCTL> { [ Print, Print ] };
+    modifier_map Mod1 { <PRSC>, <LWIN> };
+    modifier_map Mod4 { <RCTL>, <LCTL> };
+    modifier_map Control { <LALT>, <CAPS>, <RALT> };
+};
+
+~ » vi /usr/share/X11/xkb/rules/evdev
+! option        =       symbols
+  tacywin:tacy_win      =       +tacywin(tacy_win)
+
+~ » vi /usr/share/X11/xkb/rules/evdev.lst
+tacywin:tacy_win     tacy custom key
+
+```
+通过'dconf editor'加载（设置/org/gnome/desktop/input-sources/xkb-options  -> custom value 设置为 `['tacywin:tacy_win']`
+
 
 # my archlinux machine
 ## baseline
@@ -25,6 +65,81 @@ archlinux包更新非常, 如果你经常需要安装包, 会频繁出现新安�
 ``` shell
 Server=https://archive.archlinux.org/repos/2018/11/29/$repo/os/$arch
 ```
+
+## keymapping
+xmodmap可以完成键重新映射，键盘上的每个键都被编码为一个keycode，键盘的layout确定了每个keycode对应那个键值，例如keycode 38对应键'a A'（后者表示同时按下shit键），你可以通过xmodmap来完成keycode和键值的重新映射
+
+`xev -event keyboard`  显示按键信息（什么键被按下，keycode和key name）
+`xmodmap -pke` 显示了当前layout的keycode映射，你可以在你的home目录下创建.Xmodmap文件，我的键盘重新映射如下：
+
+``` shell
+cat ~/.Xmodmap
+clear lock
+clear control
+clear mod4
+keycode 66 = Control_L
+keycode 133 = Control_L
+keycode 134 = Control_R
+keycode 37 = Super_L
+add control = Control_L Control_R
+add mod4 = Super_L
+```
+
+## xfce
+自定义配置文件在.config目录下
+HiDPI设置在Appearance的字体中，任务栏图标在panel中设置，其他例如gtk3参考archlinux HiDPI页面
+
+查看所有的shortcut：`xfconf-query -c xfce4-keyboard-shortcuts -l -v | cut -d'/' -f4 | awk '{printf "%30s", $2; print "\t" $1}' | sort | uniq`
+
+## linux console
+在HiDPI显示屏下，字体很小，看不清楚，临时可以用setfont命令来修改字体设置，只对当前vt生效，永久修改，在/etc/vconsole.conf下指定
+
+``` shell
+> setfont ter-132n
+> cat /etc/vconsole.conf
+KEYMAP=us
+FONT=ter-132n
+```
+如果在vt之间切换，导致花屏，无法看清，可以添加kernel启动参数：`video=2560x1600@60`
+
+## suspend[^4]
+如果你的suspend有问题，注意日志中的Waking up信息，例如：'ACPI: Waking up from system sleep state S3'。通常情况下都是acpi事件问题，我机器把所有acpi的wakeup都关了才不会唤醒
+
+``` shell
+>cat /proc/acpi/wakeup
+Device  S-state   Status   Sysfs node
+PEG0      S3    *disabled
+EC        S4    *disabled  platform:PNP0C09:00
+HDEF      S3    *disabled  pci:0000:00:1b.0
+RP01      S3    *disabled  pci:0000:00:1c.0
+RP02      S3    *disabled  pci:0000:00:1c.1
+RP03      S3    *disabled  pci:0000:00:1c.2
+ARPT      S4    *enabled   pci:0000:03:00.0
+RP05      S3    *disabled  pci:0000:00:1c.4
+RP06      S3    *disabled  pci:0000:00:1c.5
+SPIT      S3    *disabled  spi:spi-APP000D:00
+XHC1      S3    *disabled  pci:0000:00:14.0
+ADP1      S4    *disabled  platform:ACPI0003:00
+LID0      S4    *enabled   platform:PNP0C0D:00
+
+>echo LID0 > /proc/acpi/wakeup  # disable lid0
+
+>cat /etc/systemd/system/disable-acpi-wakeup.service
+
+[Unit]
+Description=Disable APCI wakeup triggers in /proc/acpi/wakeup
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c "echo RP01 > /proc/acpi/wakeup; echo RP02 > /proc/acpi/wakeup; echo RP03 > /proc/acpi/wakeup; echo RP05 > /proc/acpi/wakeup; echo RP06 > /proc/acpi/wakeup; echo LID0 > /proc/acpi/wakeup"
+ExecStop=/bin/sh -c "echo RP01 > /proc/acpi/wakeup; echo RP02 > /proc/acpi/wakeup; echo RP03 > /proc/acpi/wakeup; echo RP05 > /proc/acpi/wakeup; echo RP06 > /proc/acpi/wakeup; echo LID0 > /proc/acpi/wakeup"
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+```
+## 创建bridge
+创建bridge使用systemd-network，我碰到的问题是bridge dev创建了，但是网络没有up，用networkctl查看，显示`configuring no-carrier`，需要在network配置部分增加`ConfigureWithoutCarrier=true`解决
 
 ## gnome
 ### gnome-shell
@@ -99,6 +214,14 @@ dmidecode
 lscpu
 lshw
 hdparm
+
+## cpu
+### watch cpu
+`watch grep \"cpu MHz\" /proc/cpuinfo`
+### tlp
+配置文件/etc/default/tlp
+
+`tlp-stat -p`查看当前cpu设置
 
 ## 查找网卡的插槽地址
 
@@ -468,14 +591,21 @@ net.ipv4.tcp_fack = 0
 net.ipv4.tcp_slow_start_after_idle = 0
 ```
 
-## 网卡bonding
+## bonding
 `teamdctl team0 state`
+## wireless
+终端手动配置无线网卡需要用到wpa_supplicant包（iw不支持wpa2 person）
 
+``` shell
+iw dev interface_name scan
+wpa_passphrase my_essid my_passphrase > /etc/wpa_supplicant/my_essid.conf
+wpa_supplicant -c /etc/wpa_supplicant/my_essid.conf -i my_wireless_device
+```
 
-[^1]## nic bind irq
+## nic bind irq[^1]
 1. 先看看网卡现在的中断使用情况
 
-``` 1c-enterprise
+``` text
 # grep eth0 /proc/interrupts
 32:   0     140      45       850264      PCI-MSI-edge      eth0
 ```
@@ -483,18 +613,26 @@ net.ipv4.tcp_slow_start_after_idle = 0
 
 2. 看当前的绑定情况
 
-``` 1c-enterprise
+``` text
 # cat /proc/irq/32/smp_affinity
 f
 ```
 上面显示irq 32没有绑定具体的cpu，任意cpu都可以
-
+3. stop irqbalance serviec
 3. 强制绑定到某个cpu
 
-``` 1c-enterprise
+``` text
 # echo 1 >/proc/irq/32/smp_affinity
 # cat /proc/irq/32/smp_affinity
 1
+-----------------------
+or
+-----------------------
+server$ (let CPU=0; cd /sys/class/net/eth0/device/msi_irqs/;
+         for IRQ in *; do
+            echo $CPU > /proc/irq/$IRQ/smp_affinity_list
+            let CPU+=1
+         done)
 ```
 上面的操作我们强制绑定的cpu1上，所有这个网卡的中断都由cpu1处理。
 
@@ -551,6 +689,23 @@ enable-tftp
 
 注意网络里面的dhcpserver, 容易导致问题. 另外, 无线网卡需要支持ipxe才行
 
+## hardware acceleration
+intel的实现是vaapi，驱动器情况参考：https://wiki.archlinux.org/index.php/Hardware_video_acceleration#Comparison_tables
+硬件加速应用支持情况：https://wiki.archlinux.org/index.php/Hardware_video_acceleration#Application_support
+
+vainfo可以看vaapi是否配置正确
+
+### chrome
+首先，需要安装aur vaapi版本，目前由于google不合并vaapi功能，导致在主干无法用。
+
+其次，需要设置gpu flags，通过chrome://flags，gpu过滤出所有相关功能，全部启用
+
+另外由于我的机器不支持vp9，而chrome默认播放视频的编码为vp9，解决这个问题，你可以安装插件h264ify，强制chrome播放h264格式
+查看播放视频格式通过chrome://media-internals/，可以看到正在播放视频的编码格式，也能看到当前是否在用硬件解码通过video_decoder（Hardware acceleration: MojoVideoDecoder, GpuVideoDecoder）
+
+其他可以参考的资料:https://wiki.archlinux.org/index.php/Chromium#Hardware_video_acceleration
+
+
 ## software
 ### base-utils
 `du -s ./* | sort -n` 查询磁盘空间
@@ -565,9 +720,21 @@ find . -name '*.JPG' -exec mogrify -filter Triangle -define jpeg:extent=45KB -th
 
 ### ffmpeg
 
-```
+1. 压缩视频
+``` shell
 find . -name '*.MOV' -exec ffmpeg -i '{}' -vcodec libx264 -crf 32 '{}'.mp4
 ```
+
+2. 录屏[^5]
+
+``` shell
+ffmpeg -video_size 2560x1600 -framerate 10 -f x11grab -i :0.0 -f pulse -ac 2 -i default -c:v libx264 -crf 36 -preset ultrafast out.mkv
+```
+vvapi hardware codes
+https://trac.ffmpeg.org/wiki/Hardware/VAAPI
+`ffmpeg -vaapi_device /dev/dri/renderD128 -f x11grab -video_size 1920x1080 -i :0 -f pulse -ac 2 -i default -vf 'hwupload,scale_vaapi=format=nv12' -c:a aac -c:v h264_vaapi -qp 24 output.mp4`
+
+
 
 ### chrome
 1. remote desktop -> app(应用) -> chrome remote desktop -> share(分享)
@@ -599,7 +766,9 @@ Those two lines must be added before:
 pacman -Qo filename / pkgfile filename
 pactree 可以查看包依赖图, 在pacman-contrib包里面
 pacman -Sc 清除缓存包(系统里面没有安装的)
-
+#### upgrade
+Q. Signature is unknown trust
+A: sudo proxychains pacman-key --refresh-keys
 # mitmproxy
 
 安装: `pacman -S mitmproxy`, 运行: `mitmweb`, 设置需要监控的程序走代理, 同时在浏览器打开监听网址, 就可以看到所有的web请求了
@@ -705,3 +874,9 @@ https://www.digitalocean.com/community/tutorials/how-to-add-swap-on-centos-7
 [^2]: [tcp option so-linger zero when its required](https://stackoverflow.com/questions/3757289/tcp-option-so-linger-zero-when-its-required)
 
 [^3]: [Resetting a TCP connection and SO_LINGER](http://deepix.github.io/2016/10/21/tcprst.html)
+
+[^4]: [Instantaneous wakeups from suspend](https://wiki.archlinux.org/index.php/Power_management/Suspend_and_hibernate#Instantaneous_wakeups_from_suspend)
+
+[^5]: [Capture Desktop](https://trac.ffmpeg.org/wiki/Capture/Desktop)
+
+[^6]: [Custom keymaps in GNOME 3 on Wayland](https://www.beatworm.co.uk/blog/xkb)

@@ -179,6 +179,10 @@ git diff --staged
 Git won't do a diff of files that have been add-ed to your staging area without this flag. File under ¯\_(ツ)_/¯ (yes, this is a feature, not a bug, but it's baffling and non-obvious the first time it happens to you!)
 
 
+# github
+## 永久删除文件
+`$ java -jar bfg.jar --strip-blobs-bigger-than 100M some-big-repo.git`
+
 
 # 乐乐屋同步
 1. 开发在lelewu分支

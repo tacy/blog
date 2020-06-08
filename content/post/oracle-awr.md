@@ -44,9 +44,22 @@ awrddrpi.sql
 
 ## Load Profile
 DB Time = DB CPU + Non-Idle wait time (so, Non-Idle wait time = DB Time - DB CPU)[^2]
+"Elapsed" Time is the AWR report time is the "End Snap" time minus the "Begin Snap" time.
 
 DB CPU 也不包括等待在cpu运行队列,统计用的接口是getrusage, (This measure typically does not include time spent waiting on CPU run queues)
 
+The DB Time uses the gettimeofday() call, 'DB Time' is the amount of elapsed time (in microseconds) spent performing Database user-level calls including non-idle wait time, cpu run queues, on cpu, but not including the elapsed time spent on instance background processes such as PMON. The DB Time is generated using the following query:
+``` sql
+SELECT Round(NVL((e.value - s.value),-1)/60/1000000,2)||' minutes' "DB Time"
+FROM   DBA_HIST_SYS_TIME_MODEL s,
+       DBA_HIST_SYS_TIME_MODEL e
+WHERE  s.snap_id = &AWRStartSnapID AND
+       e.snap_id = &AWREndSnapID anD
+       e.dbid = s.dbid AND
+       e.instance_number = s.instance_number AND
+       s.stat_name = 'DB time' AND
+       e.stat_id = s.stat_id;
+```
 
 ## Instance Efficiency Percentages (Target 100%)
 Execute to Parse %: 这个值越接近100%越好（执行次数/解析次数）
@@ -61,6 +74,32 @@ Suddenly life is more simple. You want to know the total IOPS and throughput? It
 
 One word of warning though: there are other database processes driving I/O which may not be tracked in these statistics. I see no evidence for control file reads and writes being shown, although these are insignificant in magnitude. More significant would be I/O from the archiver process for databases running in archive log mode, as each redo log must be sequentially read and re-written out as an archive log. Are these included? Yet another possibility would be the Recovery Writer (RVWR) process which is responsible for writing flashback logs when database flashback logging is enabled. [Discussions with Jonathan Lewis suggest these stats are all included – and let’s face it, he wrote the book on the subject…!]  It all adds up… Oracle really needs to provide better clarity on what these statistics are measuring.
 
+## File IO Stats
+In 11.2.0.4 or later, new stats "1-bk Rds/s" and "Av 1-bk Rd(ms)" appear in "Tablespace IO Stats" and "File IO Stats" in AWR report.
+What is the difference between the old stats "Av Rds/s", "Av Rd(ms)" and the new stats "1-bk Rds/s" and "Av 1-bk Rd(ms)"?
+
+The following columns are the combined statistics for both single block reads and multi block reads:
+``` text
+Av Rds/s : Number of physical reads per second
+Av Rd(ms) : Average read time of physical read
+```
+The following columns are related to single block reads only:
+
+``` text
+1-bk Rds/s : Number of single block reads per second
+Av 1-bk Rd(ms) : Average read time of single block read
+```
+"Av Rd(ms)" is obtained by computing READTIM/PHYRDS.
+"Av 1-bk Rd(ms)" is obtained by computing SINGLEBLKRDTIM/SINGLEBLKRDS
+
+All the stats above come from the columns of DBA_HIST_FILESTATXS:
+
+``` text
+PHYRDS : Number of physical reads
+READTIM : Cumulative physical read time (in hundredths of a second)
+SINGLEBLKRDS : Number of single block reads
+SINGLEBLKRDTIM : Cumulative single block read time (in hundredths of a second)
+```
 
 # Oracle ADDM
 Automatic Database Diagnostic Monitoring Report analyzes the AWR data on a regular basis, to give you overview of the root cause of the problem which is affecting your database's performance. It also provides suggestions or recommendations for rectifying any problem identified and lists the areas which are having no issues. ADDM recommends multiple solutions for the DBA to choose from which includes,
@@ -88,13 +127,14 @@ Below mentioned is the script which you can run to generate your ASH report,
 For Oracle RAC Environment :
 
 `@$ORACLE_HOME/rdbms/admin/ashrpti.sql`
+
 # SQLPLUS
 # format output
 set linesize 250
 column colunm_name format a30
 SET LINESIZE 130
 SET PAGESIZE 0
-
+set serveroutput off/on
 
 # snapshot
 EXEC DBMS_WORKLOAD_REPOSITORY.create_snapshot;
@@ -108,32 +148,13 @@ alter session set statistics_level='ALL';
 SELECT * FROM table(DBMS_XPLAN.DISPLAY_CURSOR(FORMAT=>'ALLSTATS LAST ALL +OUTLINE'));
 
 
-SELECT * FROM TABLE(DBMS_XPLAN.display_cursor(sql_id=>'cwq13zuqc68hz', format=>'ALLSTATS LAST +outline +PEEKED_BINDS'));
+SELECT * FROM TABLE(DBMS_XPLAN.display_cursor(sql_id=>'9c53z6p4t6ddt', format=>'ALLSTATS LAST +outline +PEEKED_BINDS'));
 
 select * from table(dbms_xplan.display_awr(sql_id=>'48u49a2dxufrm', format=>'ALLSTATS LAST +outline +PEEKED_BINDS'));
 
 
-select * from (
-select
-     ash.SQL_ID , ash.SQL_PLAN_HASH_VALUE Plan_hash, aud.name type,
-     sum(decode(ash.session_state,'ON CPU',1,0))     "CPU",
-     sum(decode(ash.session_state,'WAITING',1,0))    -
-     sum(decode(ash.session_state,'WAITING', decode(wait_class, 'User I/O',1,0),0))    "WAIT" ,
-     sum(decode(ash.session_state,'WAITING', decode(wait_class, 'User I/O',1,0),0))    "IO" ,
-     sum(decode(ash.session_state,'ON CPU',1,1))     "TOTAL"
-from dba_hist_active_sess_history ash,
-     audit_actions aud
-where SQL_ID is not NULL
-   -- and ash.dbid=&DBID
-   and ash.sql_opcode=aud.action
-   -- and ash.sample_time > sysdate - &minutes /( 60*24)
-group by sql_id, SQL_PLAN_HASH_VALUE   , aud.name
-order by sum(decode(session_state,'ON CPU',1,1))   desc
-) where  rownum < 20
-
 
 # oracle patch
-
 ## 查看补丁列表
 `/cmcc/app/oracle/product/12.1.0/OPatch/opatch lsinventory`
 
@@ -142,8 +163,100 @@ order by sum(decode(session_state,'ON CPU',1,1))   desc
 set long 9999
 `select dbms_metadata.get_ddl('INDEX',index_name) from user_indexes where table_name=upper('wfp_approval_organization');`
 
+## sql id
+select sql_id,username from DBA_HIST_ACTIVE_SESS_HISTORY d inner join dba_users u on u.user_id=d.user_id  where sql_id='6wt2v08kfrf0p';
+
+
+## kill session
+SELECT 'ALTER SYSTEM KILL SESSION '''||sid||','||serial#||''' IMMEDIATE;' FROM v$session where username= '';
+
+rac - ALTER SYSTEM KILL SESSION 'sid,serial#,@inst_id' immediate;  // GV$SESSION
+
+## cmcc
+select owner,segment_name,blocks,bytes/1024/1024 from dba_segments where segment_name like 'WF%' order by blocks;
+
+## ASH
+	select * from (
+	select
+ash.SQL_ID , ash.SQL_PLAN_HASH_VALUE Plan_hash, aud.name type,
+sum(decode(ash.session_state,'ON CPU',1,0))     "CPU",
+sum(decode(ash.session_state,'WAITING',1,0))    -
+sum(decode(ash.session_state,'WAITING', decode(wait_class, 'User I/O',1,0),0))    "WAIT" ,
+sum(decode(ash.session_state,'WAITING', decode(wait_class, 'User I/O',1,0),0))    "IO" ,
+sum(decode(ash.session_state,'ON CPU',1,1))     "TOTAL"
+	from dba_hist_active_sess_history ash,
+audit_actions aud
+	where SQL_ID is not NULL
+-- and ash.dbid=&DBID
+and ash.sql_opcode=aud.action
+-- and ash.sample_time > sysdate - &minutes /( 60*24)
+	group by sql_id, SQL_PLAN_HASH_VALUE   , aud.name
+	order by sum(decode(session_state,'ON CPU',1,1))   desc
+	) where  rownum < 20
+
+node6 dbid: 3933062106
+
+
+## shared pool
+``` sql
+SELECT substr(sql_text,1,800) "Stmt", count(*),
+ sum(sharable_mem)/1024/1024 "Mem",
+ sum(users_opening) "Open",
+ sum(executions) "Exec"
+ FROM v$sql
+ GROUP BY substr(sql_text,1,800)
+ HAVING sum(sharable_mem) > (select current_size*0.01 from v$sga_dynamic_components where component='shared pool');
+```
+
+For SQL statements which are identical but are not being shared, query the V$SQL_SHARED_CURSOR view to determine why the cursors are not shared.
+
+## oracle 实例状态
+`select status from v$instances`
+mount / open
+mount一般会比较快，open需要时间，手动open：`alter database open`
+
+## 编辑临时表空间
+https://dbaclass.com/article/how-to-drop-and-recreate-temp-tablespace-in-oracle/
+
+## plsql
+
+``` plsql
+begin
+  for i in 1..3
+    loop
+      for rec in (select * from testlikeindex)
+        loop
+          DBMS_OUTPUT.PUT_LINE(''||rec.OWNER);
+        end loop;
+    end loop;
+end;
+```
+# oracke management
+## autotask
+``` plsql
+SQL> select task_name,status from dba_autotask_task;
+
+TASK_NAME                                                        STATUS
+---------------------------------------------------------------- --------
+gather_stats_prog                                                ENABLED
+auto_space_advisor_prog                                          ENABLED
+AUTO_SQL_TUNING_PROG                                             ENABLED
+```
+
+# data block dump[^4]
+number col: `select UTL_RAW.CAST_TO_NUMBER( 'c303283f' ) from dual;`
+SELECT utl_raw.cast_to_number(replace('c2 4a 46',' ')) value FROM dual;
+SELECT utl_raw.cast_to_varchar2(replace('53 4d 49 54 48',' ')) value FROM dual;
+
+# oracle docker
+$ docker run -d -it --name oracle --network host store/oracle/database-enterprise:12.2.0.1
+$ docker exec -it oracle bash -c "source /home/oracle/.bashrc; sqlplus /nolog"
+$ sqlplus sys/Oradoc_db1@ORCLCDB as sysdba
+
 
 [^1]: [https://blogs.oracle.com/optimizer/how-to-generate-a-useful-sql-execution-plan](How to Generate a Useful SQL Execution Plan)
 [^2]:[What Elapsed Time, DB Time and DB CPU represent in AWR report and how to calculate Wait time (Non-Idle)](http://deepakbhatnagardba.blogspot.com/2015/12/what-elapsed-time-db-time-and-db-cpu.html)
 
 [^3]: [Oracle AWR Reports: Understanding I/O Statistics](https://flashdba.com/2014/02/26/oracle-awr-reports-understanding-io-statistics/)
+
+[^4]: [Oracle Data block dump](https://www.orafaq.com/wiki/Data_block)

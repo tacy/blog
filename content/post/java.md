@@ -84,6 +84,8 @@ ESTAB      0      0                                              ::ffff:10.24.20
 
 另外，如果你的应用属于商业产品，并且不支持设置so_keepalive，你可以尝试使用[libdontdie](https://github.com/flonatel/libdontdie)。
 
+# Finalizers
+Finalizers are executed when the internal garbage collection cleans up the objects. Since you have no control over the finalizer execution, it is recommended not to use them. Because the memory can only be released when the finalize method finished, long running tasks in the finalizer can block the garbage collection
 
 # socket so_linger[^1]
 socket close支持两种方式：一种是正常关闭（四次挥手，等待数据都发送完毕），一种是直接中断关闭（直接发送RESET，不会等数据发送完）。

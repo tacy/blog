@@ -325,7 +325,7 @@ $3 = 4
 $4 = 12
 (gdb) print (int)&((struct sock_common *)0)->skc_num
 $5 = 14
-[root@tacyArch tracing]# echo 'probe:tcp_sendmsg tcp_sendmsg dst=+0(%di):x32 dport=+12(%di):x16 src=+4(%di):x32 sport=+14(%di):x16 size=%dx' > kprobe_events
+[root@tacyArch tracing]# echo 'probe:tcp_sendmsg tcp_sendmsg dst=+0(%di):x32 dport=+12(%di):x16 src=+4(%di):x32 sport=+14(%di):x16 size=%dx proto=+336(+40(%si)):string' > kprobe_events
 [root@tacyArch tracing]# echo 1 > events/kprobes/tcp_sendmsg/enable
 [root@tacyArch tracing]# tail -2 trace
             curl-25876 [001] ...1 37339.320598: tcp_sendmsg: (tcp_sendmsg+0x0/0x40) dst=0x64e959ca dport=0x5000 src=0x670aa8c0 sport=0xa4f0 size=0x4c
